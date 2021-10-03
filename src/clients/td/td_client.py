@@ -28,7 +28,6 @@ class TDClient(BaseClient):
     provides = []
 
     def __init__(self):
-        self._token_path = "td_tokens.json"
         self._client_id, self._redirect_uri = get_app_info()
         self._refresh_lifetime = None
         self._auth_death_time = None
