@@ -1,4 +1,5 @@
 import configparser
+import os
 import sqlite3 as sl
 
 THISDIR = os.path.dirname(os.path.abspath(__file__))
@@ -28,8 +29,23 @@ class Database():
             self.connection.commit()
         self.connection.close()
 
+    def create_td_token_tabe(self):
+        """
+        CREATE TABLE IF NOT EXISTS td_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            auth_token TEXT NOT NULL,
+            auth_token_end INTEGER,
+            refresh_token TEXT NOT NULL,
+            refresh_token_end INTEGER
+        )
+        """
+        pass
+
     @staticmethod
     def get_db_location():
-        config = configparser.ConfiParser()
+        config = configparser.ConfigParser()
         config.read(os.path.join(CONFDIR, "db.conf"))
         return (config["LOCATION"])
+
+if __name__ == "__main__":
+    DB = Database()

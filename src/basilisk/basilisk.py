@@ -2,6 +2,7 @@ import argparse
 import atexit
 import httpx
 import logging
+import os
 import random
 import string
 import sys
@@ -9,6 +10,14 @@ import tda
 import time
 import uuid
 
+THISDIR = os.path.dirname(os.path.abspath(__file__))
+SRC_DIR = os.path.join(THISDIR, "..")
+
+for path in [SRC_DIR]:
+    if path not in sys.path:
+        sys.path.append(path)
+
+from data.basilisk_data import Database
 
 '''
 Supposed to encapsulate relevant info about current session.
@@ -23,6 +32,7 @@ class BasiliskSession():
         self.session_id = self.create_session_id()
         self._session_start = time.time()
         self._session_end = None
+        self.db = Database()
 
     @staticmethod
     def make_webdriver(browser="Chrome"):

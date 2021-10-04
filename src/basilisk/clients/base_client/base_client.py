@@ -7,6 +7,4 @@ import uuid
 from abc import ABC, abstractmethod
 
 class BaseClient(ABC):
-    @abstractmethod
-    def connect(self):
-        pass
+    pass
