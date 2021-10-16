@@ -1,51 +1,63 @@
 import configparser
+from contextlib import contextmanager
 import os
+import sys
+from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship, sessionmaker
+from sqlalchemy import create_engine
 import sqlite3 as sl
 
 THISDIR = os.path.dirname(os.path.abspath(__file__))
-CONFDIR = os.path.join(THISDIR, "..", "..", "conf")
+BASEDIR = os.path.join(THISDIR, "..", "..")
+CONFDIR = os.path.join(BASEDIR, "conf")
 
-class Database():
+Base = declarative_base()
 
-    def  __init__(self):
-        self._location = self.get_db_location()
-        self.connection = sl.connect(_location)
-        self.cursor = self.connection.cursor()
+def get_db_location():
+    config = configparser.ConfigParser()
+    config.read(os.path.join(CONFDIR, "db.conf"))
+    return os.path.join(BASEDIR, str(config["LOCATION"]["location"]))
 
-    def close(self):
-        self.connection.close()
+ENGINE = create_engine(f"sqlite:///{get_db_location()}")
 
-    def execute(self, data):
-        self.cursor.execute(data)
+@contextmanager
+def db_session():
+    global ENGINE
+    session = sessionmaker(bind=ENGINE)
 
-    def __enter__(self):
-        return self
+    try:
+        yield session
+        session.commit
+    except:
+        session.rollback
+        raise
+    finally:
+        session.close()
 
-    def __exit__(self, ext_type, exc_value, traceback):
-        self.cursor.close()
-        if isinstance(exc_value, Exception):
-            self.connection.rollback()
-        else:
-            self.connection.commit()
-        self.connection.close()
 
-    def create_td_token_tabe(self):
-        """
-        CREATE TABLE IF NOT EXISTS td_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            auth_token TEXT NOT NULL,
-            auth_token_end INTEGER,
-            refresh_token TEXT NOT NULL,
-            refresh_token_end INTEGER
-        )
-        """
-        pass
+class BasiliskSession(Base):
+    __tablename__ = "basilisk_session"
+    session_id = Column(Integer, primary_key=True)
+    date = Column(Integer)
+    clients = Column(String)
+    strats = Column(String)
+    access_token = Column(String)
+    access_end = Column(Integer)
+    refresh_token = Column(String)
+    refresh_end = Column(Integer)
 
-    @staticmethod
-    def get_db_location():
-        config = configparser.ConfigParser()
-        config.read(os.path.join(CONFDIR, "db.conf"))
-        return (config["LOCATION"])
+    def __init__(session_id, date, clients, strats):
+        self.id = session_id
+        self.date = date
+        self.clients = clients
+        self.strats = strats
 
-if __name__ == "__main__":
-    DB = Database()
+class TDTokens(Base):
+    __tablename__ = "td_tokens"
+    refresh_token = Column(String, primary_key=True)
+    refresh_end = Column(Integer)
+    access_token = Column(String)
+    access_end = Column(Integer)
+
+Base.metadata.create_all(ENGINE)
