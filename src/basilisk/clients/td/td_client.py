@@ -7,14 +7,18 @@ import sys
 import time
 
 THISDIR = os.path.dirname(os.path.abspath(__file__))
-SRC_DIR = os.path.join(THISDIR, "..", "..")
+BASE_DIR = os.path.join(THISDIR, "..", "..", "..", "..")
+SRC_DIR = os.path.join(BASE_DIR, "src")
+DATA_DIR = os.path.join(SRC_DIR, "data")
+CONF_DIR = os.path.join(BASE_DIR, "conf")
 CLIENT_DIR = os.path.join(THISDIR, "..")
 
-for path in [SRC_DIR, CLIENT_DIR]:
+for path in [SRC_DIR, CLIENT_DIR, DATA_DIR]:
     if path not in sys.path:
         sys.path.append(path)
 
 from base_client.base_client import BaseClient
+from data.basilisk_session import BasiliskSession
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -37,7 +41,8 @@ class TDClient(BaseClient):
     @staticmethod
     def get_conf_info():
         config = configparser.ConfigParser()
-        config.read("td.conf")
+        config_file = os.path.join(CONF_DIR, "td.conf")
+        config.read(config_file)
         return (config["credentials"]["CLIENT_ID"], config["credentials"]["REDIRECT_URI"])
 
     def refresh_access_token(self):
@@ -123,4 +128,3 @@ class TDClient(BaseClient):
 
 if __name__ == "__main__":
     client = TDClient()
-    client.refresh_access_token()
