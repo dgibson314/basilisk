@@ -24,7 +24,7 @@ ENGINE = create_engine(f"sqlite:///{get_db_location()}")
 @contextmanager
 def db_session():
     global ENGINE
-    SESSION_FACTORY = sessionmaker(bind=ENGINE)
+    SESSION_FACTORY = sessionmaker(bind=ENGINE,expire_on_commit=False)
 
     session = SESSION_FACTORY()
     try:
