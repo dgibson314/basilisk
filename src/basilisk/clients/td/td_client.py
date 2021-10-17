@@ -18,7 +18,7 @@ for path in [SRC_DIR, CLIENT_DIR, DATA_DIR]:
         sys.path.append(path)
 
 from base_client.base_client import BaseClient
-from data.basilisk_session import BasiliskSession
+from data.tokens import Tokens
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -68,22 +68,32 @@ class TDClient(BaseClient):
         expires_in = response_data["expires_in"]
         safe_expiration = self.calc_access_end(expires_in)
         data = {
-            "access_token" : new_access_token,
-            "access_ends"  : safe_expiration,
+            "session_token" : new_access_token,
+            "session_token_end"  : safe_expiration,
         }
+        
+        print(data)
 
-        with open(self._token_path, "w") as f:
-            json.dump(data, f)
+        if Tokens.update("td", data):
+            print("Refreshing access token succeeded.")
+        else:
+            print("Refreshing access token failed.")
+            return None
+
 
     def refreshtoken(self):
-        with open(self._token_path) as f:
-            data = json.load(f)
+        """
+        Fetches refresh token from the DB.
+        TODO: this is inefficient. We should have some type
+        of DB-backed context cache to hold onto the refresh token
+        on a per-session basis.
+        """
+        try:
+            return Tokens.get("td").auth_token
+        except:
+            print("Failed to fetch refresh token")
+            return None
 
-            refreshtoken = data.get("refresh_token")
-            if not refreshtoken:
-                raise TokenError
-
-            return refreshtoken
 
     @staticmethod
     def calc_access_end(lifetime):
@@ -109,22 +119,21 @@ class TDClient(BaseClient):
         """
         WEEK_IN_SEC = 604800
 
-        with open(self._token_path) as f:
-            data = json.load(f)
+        try:
+            refresh_end = Tokens.get("td").auth_token_end
+        except:
+            print("Failed to fetch refresh token end")
+            return None
 
-        refresh_lifetime = data["refresh_token_expires_in"]
         current_time = round(time.time())
 
-        max_end_time = current_time + refresh_lifetime
+        max_end_time = current_time + refresh_end
         end_time = max_end_time - WEEK_IN_SEC
         logger.debug("TDClient - refresh token end time: %d" % end_time)
 
-        if data.get("refresh_end_time") is None:
-            logger.debug("TDClient - Writing refresh token end time to json file")
-            data["refresh_end_time"] = end_time_
-            with open(self._token_path, "w") as f:
-                json.dump(data, f)
+        return end_time
 
 
 if __name__ == "__main__":
     client = TDClient()
+    client.refresh_access_token()

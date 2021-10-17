@@ -24,13 +24,14 @@ ENGINE = create_engine(f"sqlite:///{get_db_location()}")
 @contextmanager
 def db_session():
     global ENGINE
-    session = sessionmaker(bind=ENGINE)
+    SESSION_FACTORY = sessionmaker(bind=ENGINE)
 
+    session = SESSION_FACTORY()
     try:
         yield session
-        session.commit
+        session.commit()
     except:
-        session.rollback
+        session.rollback()
         raise
     finally:
         session.close()
@@ -53,11 +54,19 @@ class BasiliskSession(Base):
         self.clients = clients
         self.strats = strats
 
-class TDTokens(Base):
-    __tablename__ = "td_tokens"
-    refresh_token = Column(String, primary_key=True)
-    refresh_end = Column(Integer)
-    access_token = Column(String)
-    access_end = Column(Integer)
+class Tokens(Base):
+    __tablename__ = "tokens"
+    client = Column(String, primary_key=True)
+    auth_token = Column(String)
+    auth_token_end = Column(Integer)
+    session_token = Column(String)
+    session_token_end = Column(Integer)
+
+    def __init__(client, auth_token, auth_token_end, session_token, session_token_end):
+        self.client = client
+        self.auth_token = auth_token
+        self.auth_token_end = auth_token_end
+        self.session_token = session_token
+        self.session_token_end = session_token_end
 
 Base.metadata.create_all(ENGINE)
