@@ -11,6 +11,7 @@ import time
 import uuid
 
 THISDIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.join(THISDIR, "..", "..")
 SRC_DIR = os.path.join(THISDIR, "..")
 
 for path in [SRC_DIR]:

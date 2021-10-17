@@ -1,4 +1,3 @@
-import pdb
 import os
 import sys
 
@@ -20,7 +19,6 @@ class Tokens:
     def update(client_id, new_values):
         with bd.db_session() as db:
             try:
-                pdb.set_trace()
                 update_stmt = (
                     update(bd.Tokens.__table__)
                     .where(bd.Tokens.client == client_id)
@@ -36,6 +34,4 @@ class Tokens:
         return True
 
 if __name__ == "__main__":
-    tokens = Tokens()
-    row = tokens.get("td")
     pass
