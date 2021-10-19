@@ -1,1 +1,4 @@
 Playing around with stonks :)
+
+The end-goal here is to create a modular automated-trading framework, where multiple
+client-facing modules and trading strategies can be "plugged-in".
