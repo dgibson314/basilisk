@@ -8,7 +8,7 @@ import basilisk_data as bd
 THISDIR = os.path.dirname(os.path.abspath(__file__))
 BASEDIR = os.path.join(THISDIR, "..", "..")
 
-class Tokens:
+class TokensEndpoint:
     @staticmethod
     def get(client_id):
         with bd.db_session() as db:

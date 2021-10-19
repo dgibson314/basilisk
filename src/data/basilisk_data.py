@@ -40,17 +40,11 @@ def db_session():
 class BasiliskSession(Base):
     __tablename__ = "basilisk_session"
     session_id = Column(Integer, primary_key=True)
-    date = Column(Integer)
     clients = Column(String)
     strats = Column(String)
-    access_token = Column(String)
-    access_end = Column(Integer)
-    refresh_token = Column(String)
-    refresh_end = Column(Integer)
 
-    def __init__(session_id, date, clients, strats):
+    def __init__(self, session_id, clients, strats):
         self.id = session_id
-        self.date = date
         self.clients = clients
         self.strats = strats
 
@@ -62,7 +56,7 @@ class Tokens(Base):
     session_token = Column(String)
     session_token_end = Column(Integer)
 
-    def __init__(client, auth_token, auth_token_end, session_token, session_token_end):
+    def __init__(self, client, auth_token, auth_token_end, session_token, session_token_end):
         self.client = client
         self.auth_token = auth_token
         self.auth_token_end = auth_token_end

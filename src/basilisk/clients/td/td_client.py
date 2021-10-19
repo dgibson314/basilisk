@@ -17,8 +17,8 @@ for path in [SRC_DIR, CLIENT_DIR, DATA_DIR]:
     if path not in sys.path:
         sys.path.append(path)
 
-from base_client.base_client import BaseClient
-from data.tokens import Tokens
+from base_client.base_client import LevelOne
+from data.tokens import TokensEndpoint
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -29,9 +29,9 @@ AUTH_URL = BASE_URL + "oauth2"
 class TokenError(Exception):
     pass
 
-class TDClient(BaseClient):
+class TDClient(LevelOne):
     
-    provides = []
+    provides = ["equity"]
 
     def __init__(self):
         credentials = self.get_credentials_info()
@@ -43,7 +43,7 @@ class TDClient(BaseClient):
         self._access_end = None
 
     @staticmethod
-    def get_credentials_info(field):
+    def get_credentials_info():
         config = configparser.ConfigParser()
         config_file = os.path.join(CONF_DIR, "td.conf")
         config.read(config_file)
@@ -86,7 +86,7 @@ class TDClient(BaseClient):
         # Update local version
         self._refresh_token = new_refresh_token
 
-        if Tokens.update("td", data):
+        if TokensEndpoint.update("td", data):
             print("Refreshing DB succeeded")
         else:
             print("Failed to update DB with new refresh token")
@@ -111,7 +111,7 @@ class TDClient(BaseClient):
             r = requests.post(AUTH_URL + "/token", data=payload)
             r.raise_for_status()
         except Exception as e:
-            logger.error("Unable to refresh access token. Exception: " % e)
+            logger.error(f"Unable to refresh access token. Exception: {e}")
             return None
 
         response_data = r.json()
@@ -128,7 +128,7 @@ class TDClient(BaseClient):
         self._access_end = safe_expiration
 
         # Update DB with new token.
-        if Tokens.update("td", data):
+        if TokensEndpoint.update("td", data):
             print("Refreshing access token succeeded.")
         else:
             print("Refreshing access token failed.")
@@ -148,12 +148,13 @@ class TDClient(BaseClient):
                 return self._access_token
         # Otherwise check the DB
         else:
-            row = Tokens.get("td")
+            row = TokensEndpoint.get("td")
             access_token = row.session_token
             access_end = row.session_token_end
             # Values may be null if this is the first time we're starting the DB?
             # Get a fresh access token
-            if access_token == "null" or access_end == "null":
+            if (access_token == "null" or access_end == "null" or
+                access_token is None or access_end is None):
                 return self.refresh_access_token()
 
             # If the DB token is stale request a new one
@@ -175,7 +176,7 @@ class TDClient(BaseClient):
             return self._refresh_token
         else:
             try:
-                token = Tokens.get("td").auth_token
+                token = TokensEndpoint.get("td").auth_token
                 self._refresh_token = token
                 return token
             except:
@@ -219,36 +220,143 @@ class TDClient(BaseClient):
     ######### INSTRUMENT DATA #############
     #######################################
 
-    def get_quote(self, symbol):
-        url = BASE_URL + f"/marketdata/{symbol}/quotes"
-        headers = {"Authorization": f"Bearer {self.access_token()}"}
+    def make_get_request(self, url, params=None, headers=None):
+        """
+        Basic method for making a GET request to the TD Ameritrade API.
+        """
+        if headers is None:
+            headers = {"Authorization": f"Bearer {self.access_token()}"}
         try:
-            r = requests.get(url, headers=headers)
+            r = requests.get(url, headers=headers, params=params)
             r.raise_for_status()
         except Exception as e:
-            logger.error(f"Unable to fetch quote for {symbol}. Exception: {e}" )
-            return None
-
+            logger.error(f"Request to {url} failed with exception: {e}")
+            # TODO: consider handling this by tryint refresh_access_token() before raising
+            raise
         response_data = r.json()
         return response_data
 
+    #######################################
+    ############## QUOTES #################
+    #######################################
+
+    def get_quote(self, *symbols, field=None):
+        """
+        Gets quote info for one or more symbols.
+        If a specific field (i.e. bid price, ask price, volatility, etc)
+        is needed, a dict mapping of symbols to their fields is returned.
+        Otherwise all quote info is returned.
+        """
+        url = BASE_URL + "marketdata/quotes" params = {"symbol" : ",".join(symbols)}
+        data = self.make_get_request(url, params=params)
+
+        if field:
+            results = {}
+            for symbol in symbols:
+                results[symbol] = data[symbol][field]
+            return results
+
+        return data
+
+    def get_bid_price(self, *symbols):
+        return self.get_quote(*symbols, field="bidPrice")
+
+    def get_bid_size(self, *symbols):
+        return self.get_quote(*symbols, field="bidSize")
+
+    def get_ask_price(self, *symbols):
+        return self.get_quote(*symbols, field="askPrice")
+
+    def get_ask_size(self, *symbols):
+        return self.get_quote(*symbols, field="askSize")
+
+    def get_open_price(self, *symbols):
+        return self.get_quote(*symbols, field="openPrice")
+
+    def get_high_price(self, *symbols):
+        return self.get_quote(*symbols, field="highPrice")
+
+    def get_low_price(self, *symbols):
+        return self.get_quote(*symbols, field="lowPrice")
+
+    def get_close_price(self, *symbols):
+        return self.get_quote(*symbols, field="closePrice")
+
+    def get_volatility(self, *symbols):
+        return self.get_quote(*symbols, field="volatility")
+
+    def get_high_52(self, *symbols):
+        return self.get_quote(*symbols, field="52WkHigh")
+
+    def get_low_52(self, *symbols):
+        return self.get_quote(*symbols, field="52WkLow")
+
     def get_fundamentals(self, symbol):
-        url = BASE_URL + "/instruments"
-        headers = {"Authorization": f"Bearer {self.access_token()}"}
-        payload = {
+        url = BASE_URL + "instruments"
+        params = {
             "symbol" : symbol,
             "projection" : "fundamental"
         }
-        try:
-            r = requests.get(url, headers=headers, params=payload)
-            r.raise_for_status()
-        except Exception as e:
-            logger.error(f"Unable to fetch fundamentals for {symbol}. Exception: {e}")
-            return None
+        return self.make_get_request(url, params=params)
 
-        response_data = r.json()
-        return response_data
+    ###################################
+    ########## PRICE HISTORY ##########
+    ###################################
+
+    def get_price_history(self, symbol, period_type="day", period=10,
+            frequency_type="minute", frequency=1, end_date=None, start_date=None,
+            extended_hours=true):
+        """
+        Gets the price history for a symbol.
+        Args:
+        - symbol: the symbol to get the history of
+        - period_type: type of period to show. Valid values are
+            * day
+            * month
+            * year
+            * ytd (year to date)
+        - period: number of periods to show. Valid periods by period_type
+            * day: 1, 2, 3, 4, 5, 10
+            * month: 1, 2, 3, 6
+            * year: 1, 2, 3, 5, 10, 15, 20
+            * ytd: 1
+        - frequency_type: type of frequency with which a new candle is formed. Valid
+            frequency types by period_type
+            * day: minute
+            * month: daily, weekly
+            * year: daily, weekly, monthly
+            * ytd: daily, weekly
+        - frequency: number of the frequency_type to be included in each candle. Valid
+            frequencies by frequency_type
+            * minute: 1, 5, 10, 15, 30
+            * daily: 1
+            * weekly: 1
+            * monthly: 1
+        - end_date: End date as milliseconds since epoch. If start_date and end_date are
+            provided, period should not be provided.
+        - start_date: Start date as millisconds since epoch. If start_date and end_date are
+            provided, period should not be provided.
+        - extended_hours: True to return extended hours data, false for regular market hours only.
+        """
+        raise NotImplementedError
+
+    def get_market_hours(self, market, date):
+        """
+        Retrieve market hours for specified single market.
+        Args:
+        - market: the market we're requesting hours for. Valid options are
+            * EQUITY
+            * OPTION
+            * BOND
+            * FOREX
+            * FUTURE
+        - date: the date for which market hours info is requested. Valid ISO-8601 formats are
+            * yyyy-MM-dd
+            * yyyy-MM-dd'T'HH:mm:ssz
+        """
+        raise NotImplementedError
+
 
 if __name__ == "__main__":
     client = TDClient()
-    print(client.get_fundamentals("AAPL"))
+    print(client.get_bid_price("AAPL", "GOOGL"))
