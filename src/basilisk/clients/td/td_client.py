@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 BASE_URL = "https://api.tdameritrade.com/v1/"
-AUTH_URL = BASE_URL + "oauth2"
+AUTH_URL = BASE_URL + "oauth2/"
 
 class TokenError(Exception):
     pass
@@ -67,16 +67,9 @@ class TDClient(LevelOne):
             "access_type"   : "offline",
             "client_id"     : self._client_id + "@AMER.OAUTHAP"
         }
-        try:
-            r = requests.post(AUTH_URL + "/token", data=payload)
-            r.raise_for_status()
-        except Exception as e:
-            logger.error("Unable to refresh refresh token. Exception: " % e)
-            return None
-
-        response_data = r.json()
-        new_refresh_token = response_data["refresh_token"]
-        expires_in = response_data["expires_in"]
+        response = self.make_post_request(AUTH_URL + "token", data=payload)
+        new_refresh_token = response["refresh_token"]
+        expires_in = response["expires_in"]
         safe_expiration = self.calc_refresh_end(expires_in)
         data = {
             "auth_token" : new_refresh_token,
@@ -107,16 +100,9 @@ class TDClient(LevelOne):
             "refresh_token" : refresh_token,
             "client_id"     : self._client_id + "@AMER.OAUTHAP"
         }
-        try:    
-            r = requests.post(AUTH_URL + "/token", data=payload)
-            r.raise_for_status()
-        except Exception as e:
-            logger.error(f"Unable to refresh access token. Exception: {e}")
-            return None
-
-        response_data = r.json()
-        new_access_token = response_data["access_token"]
-        expires_in = response_data["expires_in"]
+        response = self.make_post_request(AUTH_URL + "token", data=payload)
+        new_access_token = response["access_token"]
+        expires_in = response["expires_in"]
         safe_expiration = self.calc_access_end(expires_in)
         data = {
             "session_token" : new_access_token,
@@ -236,6 +222,19 @@ class TDClient(LevelOne):
         response_data = r.json()
         return response_data
 
+    def make_post_request(self, url, data=None, headers=None):
+        """
+        Basic method for making a POST request.
+        """
+        try:
+            r = requests.post(url, data=data)
+            r.raise_for_status()
+        except Exception as e:
+            logger.error(f"Request to {url} failed with exception: {e}")
+            raise
+        response_data = r.json()
+        return response_data
+
     #######################################
     ############## QUOTES #################
     #######################################
@@ -247,7 +246,8 @@ class TDClient(LevelOne):
         is needed, a dict mapping of symbols to their fields is returned.
         Otherwise all quote info is returned.
         """
-        url = BASE_URL + "marketdata/quotes" params = {"symbol" : ",".join(symbols)}
+        url = BASE_URL + "marketdata/quotes" 
+        params = {"symbol" : ",".join(symbols)}
         data = self.make_get_request(url, params=params)
 
         if field:
@@ -304,8 +304,8 @@ class TDClient(LevelOne):
     ###################################
 
     def get_price_history(self, symbol, period_type="day", period=10,
-            frequency_type="minute", frequency=1, end_date=None, start_date=None,
-            extended_hours=true):
+            frequency_type="minute", frequency=1, end_date=0, start_date=0,
+            extended_hours=True):
         """
         Gets the price history for a symbol.
         Args:
@@ -338,7 +338,50 @@ class TDClient(LevelOne):
             provided, period should not be provided.
         - extended_hours: True to return extended hours data, false for regular market hours only.
         """
-        raise NotImplementedError
+        def validate_args(period_type, period, frequency_type, frequency, end_date, start_date):
+            valid = True
+            # If period is provided then end_date and start_date shouldn't be
+            if period is not None:
+                valid &= (end_date == 0 and start_date == 0)
+
+            if period_type == "day":
+                valid &= frequency_type == "minute"
+                valid &= period in [1, 2, 3, 4, 5, 10]
+            elif period_type == "month":
+                valid &= frequency_type in ["daily", "weekly"]
+                valid &= period in [1, 2, 3, 6]
+            elif period_type == "year":
+                valid &= frequency_type in ["daily", "weekly", "monthly"]
+                valid &= period in [1, 2, 3, 5, 10, 15, 20]
+            elif period_type == "ytd":
+                valid &= frequency_type in ["daily", "weekly"]
+                valid &= period == 1
+
+            if frequency_type == "minute":
+                valid &= frequency in [1, 5, 10, 15, 30]
+            else:
+                valid &= frequency == 1
+
+            return valid
+
+        if not validate_args(period_type, period, frequency_type, frequency, end_date, start_date):
+            logger.error("Invalid arguments passed to get_price_history")
+            raise ValueError("Invalid arguments passed to 'get_price_history'")
+
+        params = {
+            "periodType"    : period_type,
+            "frequencyType" : frequency_type,
+            "frequency"     : frequency,
+            "needExtendedHoursData" : extended_hours,
+        }
+        if period is not None:
+            params["period"] = period
+        else:
+            params["endDate"] = end_date
+            params["startDate"] = start_data
+
+        url = BASE_URL + f"marketdata/{symbol}/pricehistory"
+        return self.make_get_request(url, params=params)
 
     def get_market_hours(self, market, date):
         """
@@ -356,7 +399,32 @@ class TDClient(LevelOne):
         """
         raise NotImplementedError
 
+    ###################################
+    ######### ACCOUNT INFO ############
+    ###################################
+
+    def get_account_info(self, positions=True, orders=True):
+        url = BASE_URL + f"accounts/{self._account_id}"
+        params = {}
+        if positions:
+            params["fields"] = "positions"
+            if orders:
+                params["fields"] = "positions,orders"
+        elif orders:
+            params["fields"] = "orders"
+        data = self.make_get_request(url, params=params)
+
+        return data
+
+    def get_account_type(self):
+        """
+        Gets the basic type of the TD account.
+        Either MARGIN or CASH.
+        """
+        data = self.get_account_info(positions=False, orders=False)
+        return data["securitiesAccount"]["type"]
+
 
 if __name__ == "__main__":
     client = TDClient()
-    print(client.get_bid_price("AAPL", "GOOGL"))
+    print(client.get_account_info())
