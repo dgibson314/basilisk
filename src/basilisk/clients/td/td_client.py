@@ -424,6 +424,101 @@ class TDClient(LevelOne):
         data = self.get_account_info(positions=False, orders=False)
         return data["securitiesAccount"]["type"]
 
+    def get_transactions(self, start_date=None, end_date=None):
+        url = BASE_URL + f"accounts/{self._account_id}/transactions"
+        params = {}
+        # TODO
+        raise NotImplementedError
+
+    ####################################
+    ############# MOVERS ###############
+    ####################################
+
+    def get_movers(self, market, direction="up", change="value"):
+        """
+        Gets the top 10 (up or down) movers by value or percent for a particular market.
+        Args:
+        - market: the market we're requesting movers for. Can be
+            * COMPX
+            * DJI
+            * SPX.X
+        - direction: either 'up' or 'down'
+        - change: either 'value' or 'percent'
+        """
+        # Validate args
+        if direction not in ["up", "down"] or change not in ["value", "percent"]:
+            raise ValueError("Invalid argument passed to 'get_movers'")
+
+        url = BASE_URL + f"marketdata/{market}/movers"
+        params = {
+            "direction" : direction,
+            "change" : change
+        }
+        data = self.make_get_request(url, params=params)
+        
+        return data
+
+    ####################################
+    ######### OPTION CHAINS ############
+    ####################################
+
+    def get_option_chain(self, symbol, contract_type, strike_count, strategy, interval, strike, option_range, from_date, to_date, exp_month, option_type, **kwargs):
+        """
+        This is a straighforward GET request but there's lots of arguments, so take a second here.
+        Args:
+        - symbol: the optionable symbol we're interested in
+        - contract_type: type of contracts to return in the chain. Can be
+            * CALL
+            * PUT
+            * ALL (TD default)
+        - strike_count: number of strikes to return above and below the at-the-money price
+        - include_quotes: include quotes for options in the option chain.
+        - strategy:
+            * SINGLE (TD default)
+            * ANALYTICAL (requires use of extra kwargs)
+            * COVERED
+            * VERTICAL
+            * CALENDAR
+            * STRANGLE
+            * STRADDLE
+            * BUTTERFLY
+            * CONDOR
+            * DIAGONAL
+            * COLLAR
+            * ROLL
+        - interval: strike interval for spread strategy chains
+        - strike: provide a strike price to return options only at that strike price
+        - range: returns options for the given range.
+            * ITM : in-the-money
+            * NTM : near-the-money
+            * OTM : out-of-the-money
+            * SAK : strikes above market
+            * SBK : strikes below market
+            * SNK : strikes near market
+            * ALL : all strikes (TD default)
+        - from_date: only return expirations after this date. For strategies,
+            expiraion refers to the nearest term expiration in the strategy. Valid
+            formats are yyyy-MM-dd and yyyy-MM-dd'T'HH:mm:ssz
+        - to_date: only return expirations before this date. For strategies,
+            expiration refers to the nearest term expiration in the strategy. Valid
+            formats are yyyy-MM-dd and yyyy-MM-dd'T'HH:mm:ssz
+        - exp_month: return only options expiring in the specified month. Month is
+            given in the the three character format.
+            Example: JAN
+            TD default is ALL
+        - option_type: types of contracts to return.
+            * S : standard contracts
+            * NS : non-standard contracts
+            * ALL : all contracts (TD default)
+
+        Keyword Arguments (applies only to the ANALYTICAL strategy)
+        - volatility
+        - underlying_price
+        - interest_rate
+        - days_to_expiration
+
+        """
+        raise NotImplementedError
 
 if __name__ == "__main__":
     client = TDClient()
